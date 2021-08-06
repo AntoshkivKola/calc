@@ -59,89 +59,125 @@ const helperIf = (stationPlan, res, install) => {
   )
 }
 
-const getDaysToFill = (stationPlan, res, install) => {
-  if (install) {
+const getDaysToFill = (stationPlan, res, eventType) => {
+  if (eventType === 'installation') {
     return (
       stationPlan.installation_days_cognex -
       (res.installationWeekdays + res.installationWeekend)
     )
+  } else if (eventType === 'commissioning') {
+    return (
+      stationPlan.commissioning_days_cognex -
+      (res.commisionWeekdays + res.commisionWeekend)
+    )
   }
-  return (
-    stationPlan.commissioning_days_cognex -
-    (res.commisionWeekdays + res.commisionWeekend)
-  )
+  return 0.5
 }
 
-const startFill = (res, stationPlan) => {
-  let i = 0
-  let count = 0
+const startFill = (res, stationPlan, dayNumber, howDaysLeftInCurrentEvent) => {
+  debugger
+  let isFirstEvent = true
+  let eventName
+  let eventDays
   while (true) {
-    if (count > 10) {
-      return
-    }
-    if (i >= COGNEX_STRATEGY.length) {
-      i = 0
+    if (dayNumber === COGNEX_STRATEGY.length) {
+      dayNumber = 0
       res.strategyCycles++
     }
-    const eventName = _.keys(COGNEX_STRATEGY[i])[0]
-    const eventDays = _.values(COGNEX_STRATEGY[i])[0]
+    if(howDaysLeftInCurrentEvent <= 0 || isFirstEvent){
+      eventName = _.keys(COGNEX_STRATEGY[dayNumber])[0]
+      eventDays = _.values(COGNEX_STRATEGY[dayNumber])[0]
+     // howDaysLeftInCurrentEvent = eventDays
+    }
+    if (!isFirstEvent && howDaysLeftInCurrentEvent <= 0) {
+      howDaysLeftInCurrentEvent = eventDays
+    }
+   
+    console.log(eventName, eventDays, howDaysLeftInCurrentEvent)
 
     switch (eventName) {
       case 'travel':
         res.roundedTravelDays += Math.ceil(eventDays)
+        const d = getDaysToFill(stationPlan, res, 'travel')
+        howDaysLeftInCurrentEvent = eventDays - howToAdd(d, eventDays)
         break
       case 'workingWeekdays':
         if (helperIf(stationPlan, res, true)) {
-          const d = getDaysToFill(stationPlan, res, true)
-
-          res.installationWeekdays += howToAdd(d, eventDays)
+          const d = getDaysToFill(stationPlan, res, 'installation')
+          res.installationWeekdays += howToAdd(d, howDaysLeftInCurrentEvent)
+          howDaysLeftInCurrentEvent = howDaysLeftInCurrentEvent - howToAdd(d, eventDays)
         } else if (helperIf(stationPlan, res, false)) {
-          const d = getDaysToFill(stationPlan, res, false)
-
-          res.commisionWeekdays += howToAdd(d, eventDays)
+          const d = getDaysToFill(stationPlan, res, 'commissioning')
+          res.commisionWeekdays += howToAdd(d, howDaysLeftInCurrentEvent)
+          howDaysLeftInCurrentEvent = howDaysLeftInCurrentEvent - howToAdd(d, eventDays)
         }
-
         break
       case 'workingWeekend':
         if (helperIf(stationPlan, res, true)) {
-          const d = getDaysToFill(stationPlan, res, true)
-
-          res.installationWeekend += howToAdd(d, eventDays)
+          const d = getDaysToFill(stationPlan, res, 'installation')
+          res.installationWeekend += howToAdd(d, howDaysLeftInCurrentEvent)
+          howDaysLeftInCurrentEvent = howDaysLeftInCurrentEvent - howToAdd(d, eventDays)
         } else if (helperIf(stationPlan, res, false)) {
-          const d = getDaysToFill(stationPlan, res, false)
+          const d = getDaysToFill(stationPlan, res, 'commissioning')
+          res.commisionWeekend += howToAdd(d, howDaysLeftInCurrentEvent)
 
-          res.commisionWeekend += howToAdd(d, eventDays)
+          console.log(
+            howDaysLeftInCurrentEvent,
+            eventDays,
+            howToAdd(d, eventDays),
+            d
+          )
+
+          howDaysLeftInCurrentEvent = howDaysLeftInCurrentEvent - howToAdd(d, eventDays)
         }
-
         break
       default:
         break
     }
-
+    console.log(dayNumber,howDaysLeftInCurrentEvent, res)
     if (
       !helperIf(stationPlan, res, true) &&
       !helperIf(stationPlan, res, false)
     ) {
-      return
+      console.log('howDaysLeftInCurrentEvent', howDaysLeftInCurrentEvent)
+      return [dayNumber, howDaysLeftInCurrentEvent]
     }
-    i++
-    count++
+    if (howDaysLeftInCurrentEvent > 0) {
+      continue
+    }
+    dayNumber++
+    isFirstEvent = false
   }
 }
 
-const fillingData = stantion => {
-  const res = { ...stantion }
+const week = () => {
+  let eventNumber = 0
+  let howDaysLeftInCurrentEvent = 0
+  return stantion => {
+    const res = { ...stantion }
 
-  const stationPlan = _.filter(STATIONS, st => st.id === res.id)[0]
-  res.strategyCycles = 1
-
-  startFill(res, stationPlan)
-
-  res.travelDays = res.roundedTravelDays / 2
-  console.log(res)
-  return res
+    const stationPlan = _.filter(STATIONS, st => st.id === res.id)[0]
+    res.strategyCycles = 1
+    response = startFill(
+      res,
+      stationPlan,
+      eventNumber,
+      howDaysLeftInCurrentEvent
+    )
+    eventNumber = response[0]
+    howDaysLeftInCurrentEvent = response[1]
+    // if (dayNumber < COGNEX_STRATEGY.length - 1) {
+    //   res.roundedTravelDays += Math.ceil(
+    //     _.values(COGNEX_STRATEGY[dayNumber])[0]
+    //   )
+    // }
+    res.travelDays = res.roundedTravelDays / 2
+    //console.log(howDaysLeftInCurrentEvent, eventNumber, res)
+    return res
+  }
 }
-
+const fillingData = week()
 const result = _.map(prepareStations, fillingData)
+//const fir = fillingData(prepareStations[0])
 //console.log(result);
-// console.log(result)
+ console.log(result)
