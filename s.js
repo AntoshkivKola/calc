@@ -38,11 +38,9 @@ const prepareStations = _.chain(STATIONS)
   .flatten()
   .value()
 
-const howToAdd = (differentDays, eventDays) => {
-  if (differentDays <= eventDays) {
-    return differentDays
-  } else if (differentDays - eventDays < 0) {
-    return differentDays
+const howToAdd = (daysNeedToFill, eventDays) => {
+  if (daysNeedToFill <= eventDays) {
+    return daysNeedToFill
   } else {
     return eventDays
   }
@@ -61,7 +59,7 @@ const helperIf = (stationPlan, res, install) => {
   )
 }
 
-const getDifferentDays = (stationPlan, res, install) => {
+const getDaysToFill = (stationPlan, res, install) => {
   if (install) {
     return (
       stationPlan.installation_days_cognex -
@@ -88,37 +86,32 @@ const startFill = (res, stationPlan) => {
     const eventName = _.keys(COGNEX_STRATEGY[i])[0]
     const eventDays = _.values(COGNEX_STRATEGY[i])[0]
 
-    console.log(eventName, eventDays)
-
     switch (eventName) {
       case 'travel':
         res.roundedTravelDays += Math.ceil(eventDays)
         break
       case 'workingWeekdays':
         if (helperIf(stationPlan, res, true)) {
-          const d = getDifferentDays(stationPlan, res, true)
+          const d = getDaysToFill(stationPlan, res, true)
 
           res.installationWeekdays += howToAdd(d, eventDays)
         } else if (helperIf(stationPlan, res, false)) {
-          const d = getDifferentDays(stationPlan, res, false)
+          const d = getDaysToFill(stationPlan, res, false)
 
           res.commisionWeekdays += howToAdd(d, eventDays)
         }
-        console.log(res)
 
         break
       case 'workingWeekend':
         if (helperIf(stationPlan, res, true)) {
-          console.log('+')
-          const d = getDifferentDays(stationPlan, res, true)
+          const d = getDaysToFill(stationPlan, res, true)
 
           res.installationWeekend += howToAdd(d, eventDays)
         } else if (helperIf(stationPlan, res, false)) {
-          const d = getDifferentDays(stationPlan, res, false)
+          const d = getDaysToFill(stationPlan, res, false)
 
           res.commisionWeekend += howToAdd(d, eventDays)
         }
-        console.log(res)
 
         break
       default:
@@ -126,10 +119,8 @@ const startFill = (res, stationPlan) => {
     }
 
     if (
-      stationPlan.installation_days_cognex <=
-        res.installationWeekdays + res.workingWeekend &&
-      stationPlan.commissioning_days_cognex <=
-        res.commisionWeekdays + res.commisionWeekend
+      !helperIf(stationPlan, res, true) &&
+      !helperIf(stationPlan, res, false)
     ) {
       return
     }
@@ -141,17 +132,16 @@ const startFill = (res, stationPlan) => {
 const fillingData = stantion => {
   const res = { ...stantion }
 
-  const stationPlan = _.filter(STATIONS, st => st.id === res.id)
+  const stationPlan = _.filter(STATIONS, st => st.id === res.id)[0]
   res.strategyCycles = 1
 
   startFill(res, stationPlan)
 
   res.travelDays = res.roundedTravelDays / 2
-
+  console.log(res)
   return res
 }
 
-// const result = _.map(prepareStations, fillingData)
-const f = fillingData(prepareStations[0])
-//console.log(prepareStations);
+const result = _.map(prepareStations, fillingData)
+//console.log(result);
 // console.log(result)
