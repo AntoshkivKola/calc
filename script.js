@@ -12,15 +12,37 @@ const STATIONS = [
     number_stations: 1,
     installation_days_cognex: 3,
     commissioning_days_cognex: 3,
+    installation_days_external: 2,
+    commissioning_days_external: 3,
   },
   {
     id: 2,
     number_stations: 2,
     installation_days_cognex: 3,
     commissioning_days_cognex: 1.5,
+    installation_days_external: 3,
+    commissioning_days_external: 1.5,
   },
-]; 
-
+];
+const COSTS = {
+  cognex_number_of_persons_onsite: 2, // каждое значение должно быть умноженно на это число
+  cognex_installation_week_day_cost: 100, // по названия понятно
+  cognex_installation_weekend_day_cost: 101, // по названия понятно
+  cognex_commissioning_week_day_cost: 102, // по названия понятно
+  cognex_commissioning_weekend_day_cost: 103, // по названия понятно
+  cognex_travel_labor_day_cost: 108, // по названия понятно (сюда округленные вставляем)
+  cognex_ticket_cost: 110, // 'это цена одного трипа, то есть strategyCycle
+  cognex_per_diem_day_cost: 112, // оплата за день (то есть это нужно будет умножить на * (inst + instWe + comm + commWe + travelDays))  - тут тревеллы неокругленные юзеаем, а фактические
+  //
+  external_number_of_persons_onsite: 3,
+  external_installation_week_day_cost: 104,
+  external_installation_weekend_day_cost: 105,
+  external_commissioning_week_day_cost: 106,
+  external_commissioning_weekend_day_cost: 107,
+  external_travel_labor_day_cost: 109,
+  external_ticket_cost: 111,
+  external_per_diem_day_cost: 113,
+};
 
 const EVENT_TYPES = {
   TRAVEL: "travel",
@@ -33,7 +55,6 @@ const EVENT_NAMES = {
   WORKING_WEEKDAYS: "workingWeekdays",
   WORKING_WEEKEND: "workingWeekend",
 };
-
 
 const prepareStations = (stations) =>
   _.chain(stations)
@@ -83,12 +104,12 @@ const getDaysToAdd = (daysNeedToFill, availableDays) => {
 const isEventOver = (stationPlan, station, install) => {
   if (install) {
     return (
-      stationPlan.installation_days_cognex ===
+      stationPlan.installation_days ===
       station.installationWeekdays + station.installationWeekend
     );
   }
   return (
-    stationPlan.commissioning_days_cognex ===
+    stationPlan.commissioning_days ===
     station.commisionWeekdays + station.commisionWeekend
   );
 };
@@ -117,10 +138,46 @@ const sum = (stations) => {
 };
 
 /**
+ * Prepares the object by removing unnecessary fields and renaming the field depending on the type
+ * @param {object} obj 
+ * @param {string} type 
+ * @param {string} objType 
+ * @returns 
+ */
+const prepareObject = (obj, type, objType) => {
+  const isStation = objType === "station";
+
+  const preparedObj = _.chain(obj)
+    .mapKeys((value, key) => {
+      if (_.includes(key, type)) {
+        return _.replace(key, isStation ? `_${type}` : `${type}_`, "");
+      }
+    })
+    .omit("undefined")
+    .value();
+
+  if (isStation) {
+    _.assign(preparedObj, {
+      id: obj.id,
+      number_stations: obj.number_stations,
+    });
+  }
+
+  return preparedObj;
+};
+
+// console.log(getCurrentValue(COSTS, "external", "costs"));
+// const calculete = (stantions, costs) => {
+//   const result = 0;
+
+//   return result;
+// };
+
+/**
  * Wrapper function to create a closure
  * @returns
  */
-const fillingData = (strategy, stations) => {
+const fillingData = (strategy, stations, costs, calcType) => {
   const strategyIndex = {
     firstTravel: 0,
     lastWorkingEvent: strategy.length - 2,
@@ -142,12 +199,12 @@ const fillingData = (strategy, stations) => {
     switch (eventType) {
       case EVENT_TYPES.INSTALLATION:
         return (
-          stationPlan.installation_days_cognex -
+          stationPlan.installation_days -
           (station.installationWeekdays + station.installationWeekend)
         );
       case EVENT_TYPES.COMMISSIONING:
         return (
-          stationPlan.commissioning_days_cognex -
+          stationPlan.commissioning_days -
           (station.commisionWeekdays + station.commisionWeekend)
         );
       case EVENT_TYPES.TRAVEL:
@@ -303,14 +360,17 @@ const fillingData = (strategy, stations) => {
   };
   //////////////////////////////////// EXECUTING //////////////////////////////////
   const preparedStations = prepareStations(stations);
-
   const result = _.map(preparedStations, (station) => {
     const isLastStation = _.isEqual(station, _.last(preparedStations));
 
-    const stationPlan = _.chain(STATIONS)
-      .filter((st) => st.id === station.id)
-      .first()
-      .value();
+    const stationPlan = prepareObject(
+      _.chain(stations)
+        .filter((st) => st.id === station.id)
+        .first()
+        .value(),
+      calcType,
+      "station"
+    );
 
     const response = startFill({
       station,
@@ -330,6 +390,6 @@ const fillingData = (strategy, stations) => {
   return sum(result);
 };
 
-const result = fillingData(COGNEX_STRATEGY, STATIONS);
+const result = fillingData(COGNEX_STRATEGY, STATIONS, COSTS, "cognex");
 
 console.log(result);
