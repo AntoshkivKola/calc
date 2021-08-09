@@ -120,13 +120,8 @@ const isEventOver = (stationPlan, station, install) => {
  * @returns
  */
 const sum = (stations, isGeneralSum) => {
-  let stationsSum = _.chain(stations);
-  if (isGeneralSum) {
-    stationsSum = stationsSum.groupBy();
-  } else {
-    stationsSum = stationsSum.groupBy("id");
-  }
-  return stationsSum
+  return _.chain(stations)
+    .groupBy(!isGeneralSum && "id")
     .map((station, id) => {
       return {
         id: parseInt(id),
