@@ -96,7 +96,10 @@ const switchIf = (
 };
 
 const startFill = (res, stationPlan, dayNumber, howDaysLeftInCurrentEvent) => {
-  debugger;
+  if (dayNumber === 0) {
+    res.strategyCycles = 1;
+  }
+
   let isFirstEvent = true;
   let eventName;
   let eventDays;
@@ -138,7 +141,7 @@ const startFill = (res, stationPlan, dayNumber, howDaysLeftInCurrentEvent) => {
           howDaysLeftInCurrentEvent,
           eventDays
         );
-      
+
         break;
       default:
         break;
@@ -147,6 +150,7 @@ const startFill = (res, stationPlan, dayNumber, howDaysLeftInCurrentEvent) => {
       !helperIf(stationPlan, res, true) &&
       !helperIf(stationPlan, res, false)
     ) {
+      res.travelDays = res.roundedTravelDays / 2;
       return [dayNumber, howDaysLeftInCurrentEvent];
     }
     if (howDaysLeftInCurrentEvent > 0) {
@@ -164,9 +168,7 @@ const week = () => {
     const res = { ...stantion };
 
     const stationPlan = _.filter(STATIONS, (st) => st.id === res.id)[0];
-    if(eventNumber === 0){
-      res.strategyCycles = 1;
-    }
+
     response = startFill(
       res,
       stationPlan,
@@ -176,7 +178,6 @@ const week = () => {
     eventNumber = response[0];
     howDaysLeftInCurrentEvent = response[1];
 
-    res.travelDays = res.roundedTravelDays / 2;
     return res;
   };
 };
@@ -200,29 +201,24 @@ const checkTravel = (stantions) => {
 const sum = (stantions) => {
   const res = _.chain(stantions)
     .groupBy("id")
-    .map(function (value, key) {
+    .map((value) => {
       return _.reduce(
         value,
-        function (result, currentObject) {
-          console.log("reduce result:::", result);
-          console.log("reduce currentObject::::", currentObject);
-          return {
-            id: currentObject.id,
-            installationWeekdays:
-              result.installationWeekdays + currentObject.installationWeekdays,
-            installationWeekend:
-              result.installationWeekend + currentObject.installationWeekend,
-            commisionWeekdays:
-              result.commisionWeekdays + currentObject.commisionWeekdays,
-            commisionWeekend:
-              result.commisionWeekend + currentObject.commisionWeekend,
-            travelDays: result.travelDays + currentObject.travelDays,
-            roundedTravelDays:
-              result.roundedTravelDays + currentObject.roundedTravelDays,
-            strategyCycles:
-              result.strategyCycles + currentObject.strategyCycles,
-          };
-        },
+        (result, currentObject) => ({
+          id: currentObject.id,
+          installationWeekdays:
+            result.installationWeekdays + currentObject.installationWeekdays,
+          installationWeekend:
+            result.installationWeekend + currentObject.installationWeekend,
+          commisionWeekdays:
+            result.commisionWeekdays + currentObject.commisionWeekdays,
+          commisionWeekend:
+            result.commisionWeekend + currentObject.commisionWeekend,
+          travelDays: result.travelDays + currentObject.travelDays,
+          roundedTravelDays:
+            result.roundedTravelDays + currentObject.roundedTravelDays,
+          strategyCycles: result.strategyCycles + currentObject.strategyCycles,
+        }),
         {
           id: 0,
           installationWeekdays: 0,
