@@ -180,19 +180,45 @@ const checkTravel = (stantions)=>{
     return
   }
   stantions[stantions.length - 1].roundedTravelDays += Math.ceil(_.values(COGNEX_STRATEGY[0])[0])
+  stantions[stantions.length - 1].travelDays = stantions[stantions.length - 1].roundedTravelDays / 2
   return stantions
 }
 
 const sum = (stantions) =>{
 
-  
-
+  //const res = _.sumBy(stantions, (st)=>{  })
+  const res = _.chain(stantions)
+  .groupBy("id").map(function(value, key) {
+    return _.reduce(value, function(result, currentObject) {
+        return {
+            id: currentObject.id,
+            installationWeekdays: result.installationWeekdays + currentObject.installationWeekdays,
+            installationWeekend: result.installationWeekend + currentObject.installationWeekend,
+            commisionWeekdays: result.commisionWeekdays + currentObject.commisionWeekdays,
+            commisionWeekend: result.commisionWeekend + currentObject.commisionWeekend,
+            travelDays: result.travelDays + currentObject.travelDays,
+            roundedTravelDays:result.roundedTravelDays + currentObject.roundedTravelDays,
+            strategyCycles: result.strategyCycles + currentObject.strategyCycles
+        }
+    }, {
+      id: 0,
+      installationWeekdays: 0,
+      installationWeekend: 0,
+      commisionWeekdays: 0,
+      commisionWeekend: 0,
+      travelDays: 0,
+      roundedTravelDays: 0,
+      strategyCycles: 0
+    });
+})
+.value();
+  console.log('res',res)
   return stantions
 }
 
 const fillingData = week()
 const result = checkTravel(_.map(prepareStations, fillingData))
-
 //const fir = fillingData(prepareStations[0])
 //console.log(result);
- console.log(result)
+console.log(result)
+sum(result)
