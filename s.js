@@ -74,6 +74,27 @@ const getDaysToFill = (stationPlan, res, eventType) => {
   return 0.5;
 };
 
+const switchIf = (
+  res,
+  stationPlan,
+  property1,
+  property2,
+  howDaysLeftInCurrentEvent,
+  eventDays
+) => {
+  if (helperIf(stationPlan, res, true)) {
+    const daysToFill = getDaysToFill(stationPlan, res, "installation");
+    res[property1] += howToAdd(daysToFill, howDaysLeftInCurrentEvent);
+    return (howDaysLeftInCurrentEvent =
+      howDaysLeftInCurrentEvent - howToAdd(daysToFill, eventDays));
+  } else if (helperIf(stationPlan, res, false)) {
+    const daysToFill = getDaysToFill(stationPlan, res, "commissioning");
+    res[property2] += howToAdd(daysToFill, howDaysLeftInCurrentEvent);
+    return (howDaysLeftInCurrentEvent =
+      howDaysLeftInCurrentEvent - howToAdd(daysToFill, eventDays));
+  }
+};
+
 const startFill = (res, stationPlan, dayNumber, howDaysLeftInCurrentEvent) => {
   debugger;
   let isFirstEvent = true;
@@ -99,43 +120,25 @@ const startFill = (res, stationPlan, dayNumber, howDaysLeftInCurrentEvent) => {
         howDaysLeftInCurrentEvent = eventDays - howToAdd(daysToFill, eventDays);
         break;
       case "workingWeekdays":
-        if (helperIf(stationPlan, res, true)) {
-          const daysToFill = getDaysToFill(stationPlan, res, "installation");
-          res.installationWeekdays += howToAdd(
-            daysToFill,
-            howDaysLeftInCurrentEvent
-          );
-          howDaysLeftInCurrentEvent =
-            howDaysLeftInCurrentEvent - howToAdd(daysToFill, eventDays);
-        } else if (helperIf(stationPlan, res, false)) {
-          const daysToFill = getDaysToFill(stationPlan, res, "commissioning");
-          res.commisionWeekdays += howToAdd(
-            daysToFill,
-            howDaysLeftInCurrentEvent
-          );
-          howDaysLeftInCurrentEvent =
-            howDaysLeftInCurrentEvent - howToAdd(daysToFill, eventDays);
-        }
+        howDaysLeftInCurrentEvent = switchIf(
+          res,
+          stationPlan,
+          "installationWeekdays",
+          "commisionWeekdays",
+          howDaysLeftInCurrentEvent,
+          eventDays
+        );
         break;
       case "workingWeekend":
-        if (helperIf(stationPlan, res, true)) {
-          const daysToFill = getDaysToFill(stationPlan, res, "installation");
-          res.installationWeekend += howToAdd(
-            daysToFill,
-            howDaysLeftInCurrentEvent
-          );
-          howDaysLeftInCurrentEvent =
-            howDaysLeftInCurrentEvent - howToAdd(daysToFill, eventDays);
-        } else if (helperIf(stationPlan, res, false)) {
-          const daysToFill = getDaysToFill(stationPlan, res, "commissioning");
-          res.commisionWeekend += howToAdd(
-            daysToFill,
-            howDaysLeftInCurrentEvent
-          );
-
-          howDaysLeftInCurrentEvent =
-            howDaysLeftInCurrentEvent - howToAdd(daysToFill, eventDays);
-        }
+        howDaysLeftInCurrentEvent = switchIf(
+          res,
+          stationPlan,
+          "installationWeekend",
+          "commisionWeekend",
+          howDaysLeftInCurrentEvent,
+          eventDays
+        );
+      
         break;
       default:
         break;
@@ -161,7 +164,9 @@ const week = () => {
     const res = { ...stantion };
 
     const stationPlan = _.filter(STATIONS, (st) => st.id === res.id)[0];
-    res.strategyCycles = 1;
+    if(eventNumber === 0){
+      res.strategyCycles = 1;
+    }
     response = startFill(
       res,
       stationPlan,
