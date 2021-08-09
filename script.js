@@ -82,9 +82,10 @@ const isEventOver = (stationPlan, station, install) => {
  * @param {object} stationPlan
  * @param {object} station
  * @param {string} eventType
+ * @param {number} dayNumber
  * @returns
  */
-const getDaysToFill = (stationPlan, station, eventType) => {
+const getDaysToFill = (stationPlan, station, eventType, dayNumber = 0) => {
   if (eventType === "installation") {
     return (
       stationPlan.installation_days_cognex -
@@ -95,8 +96,10 @@ const getDaysToFill = (stationPlan, station, eventType) => {
       stationPlan.commissioning_days_cognex -
       (station.commisionWeekdays + station.commisionWeekend)
     );
+  } else if (eventType === "travel") {
+    return _.values(COGNEX_STRATEGY[dayNumber])[0];
   }
-  return 0.5;
+  return 0;
 };
 
 /**
@@ -172,7 +175,7 @@ const startFill = (
     switch (eventName) {
       case "travel":
         addTravelDays(station);
-        const daysToFill = getDaysToFill(stationPlan, station, "travel");
+        const daysToFill = getDaysToFill(stationPlan, station, "travel", dayNumber);
         howDaysLeftInCurrentEvent =
           eventDays - getDaysToAdd(daysToFill, eventDays);
         break;
@@ -210,9 +213,7 @@ const startFill = (
       if (dayNumber === COGNEX_STRATEGY.length - 2) {
         addTravelDays(station);
         dayNumber = 0;
-        console.log("eventName", eventName, station.id);
       }
-      console.log(station);
       return [dayNumber, howDaysLeftInCurrentEvent];
     }
 
