@@ -87,7 +87,6 @@ const startFill = (res, stationPlan, dayNumber, howDaysLeftInCurrentEvent) => {
     if(howDaysLeftInCurrentEvent <= 0 || isFirstEvent){
       eventName = _.keys(COGNEX_STRATEGY[dayNumber])[0]
       eventDays = _.values(COGNEX_STRATEGY[dayNumber])[0]
-     // howDaysLeftInCurrentEvent = eventDays
     }
     if (!isFirstEvent && howDaysLeftInCurrentEvent <= 0) {
       howDaysLeftInCurrentEvent = eventDays
@@ -166,18 +165,34 @@ const week = () => {
     )
     eventNumber = response[0]
     howDaysLeftInCurrentEvent = response[1]
-    // if (dayNumber < COGNEX_STRATEGY.length - 1) {
-    //   res.roundedTravelDays += Math.ceil(
-    //     _.values(COGNEX_STRATEGY[dayNumber])[0]
-    //   )
-    // }
+  
     res.travelDays = res.roundedTravelDays / 2
-    //console.log(howDaysLeftInCurrentEvent, eventNumber, res)
     return res
   }
 }
+
+const checkTravel = (stantions)=>{
+  let countTravel = 0;
+  stantions.forEach(stantion => {
+    countTravel += stantion.roundedTravelDays;
+  });
+  if(countTravel % 2 === 0){
+    return
+  }
+  stantions[stantions.length - 1].roundedTravelDays += Math.ceil(_.values(COGNEX_STRATEGY[0])[0])
+  return stantions
+}
+
+const sum = (stantions) =>{
+
+  
+
+  return stantions
+}
+
 const fillingData = week()
-const result = _.map(prepareStations, fillingData)
+const result = checkTravel(_.map(prepareStations, fillingData))
+
 //const fir = fillingData(prepareStations[0])
 //console.log(result);
  console.log(result)
