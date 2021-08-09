@@ -119,9 +119,14 @@ const isEventOver = (stationPlan, station, install) => {
  * @param {object[]} stations
  * @returns
  */
-const sum = (stations) => {
-  return _.chain(stations)
-    .groupBy("id")
+const sum = (stations, isGeneralSum) => {
+  let stationsSum = _.chain(stations);
+  if (isGeneralSum) {
+    stationsSum = stationsSum.groupBy();
+  } else {
+    stationsSum = stationsSum.groupBy("id");
+  }
+  return stationsSum
     .map((station, id) => {
       return {
         id: parseInt(id),
@@ -165,9 +170,14 @@ const prepareObject = (obj, type, objType) => {
 
   return preparedObj;
 };
-
+const isEmptyStation = (station) => {
+  return (
+    _.get(station, "installation_days") === 0 &&
+    _.get(station, "commissioning_days") === 0
+  );
+};
 /**
- * Calculates fields values 
+ * Calculates fields values
  * @param {object} station
  * @param {object} costs
  * @param {string} stationKey
@@ -177,16 +187,22 @@ const calc = (station, costs, stationKey, costKey) => {
   let value =
     _.get(station, stationKey) * _.get(costs, "number_of_persons_onsite");
   const price = _.get(costs, costKey);
- 
+
   switch (stationKey) {
     case "perDiem":
       // (inst + instWe + comm + commWe + travelDays)
-      value =
-        _.get(station, "installationWeekdays") +
-        _.get(station, "installationWeekend") +
-        _.get(station, "commisionWeekdays") +
-        _.get(station, "commisionWeekend") +
-        _.get(station, "travelDays");
+      value = _.sum(
+        _.map(
+          [
+            _.get(station, "installationWeekdays"),
+            _.get(station, "installationWeekend"),
+            _.get(station, "commisionWeekdays"),
+            _.get(station, "commisionWeekend"),
+            _.get(station, "travelDays"),
+          ],
+          (v) => v * _.get(costs, "number_of_persons_onsite")
+        )
+      );
 
       break;
     case "strategyCycles":
@@ -212,42 +228,44 @@ const calc = (station, costs, stationKey, costKey) => {
  * @returns
  */
 const fillPriceList = (stations, costs) => {
-  const result = _.chain(stations).map((station) => ({
-    id: _.get(station, "id"),
-    installationWeekdays: calc(
-      station,
-      costs,
-      "installationWeekdays",
-      "installation_week_day_cost"
-    ),
+  const result = _.chain(stations)
+    .map((station) => ({
+      id: _.get(station, "id"),
+      installationWeekdays: calc(
+        station,
+        costs,
+        "installationWeekdays",
+        "installation_week_day_cost"
+      ),
 
-    installationWeekend: calc(
-      station,
-      costs,
-      "installationWeekend",
-      "installation_weekend_day_cost"
-    ),
-    commisionWeekdays: calc(
-      station,
-      costs,
-      "commisionWeekdays",
-      "commissioning_week_day_cost"
-    ),
-    commisionWeekend: calc(
-      station,
-      costs,
-      "commisionWeekend",
-      "commissioning_weekend_day_cost"
-    ),
-    travelDays: calc(
-      station,
-      costs,
-      "roundedTravelDays",
-      "travel_labor_day_cost"
-    ),
-    trips: calc(station, costs, "strategyCycles", "ticket_cost"),
-    perDiem: calc(station, costs, "perDiem", "per_diem_day_cost"),
-  })).value();
+      installationWeekend: calc(
+        station,
+        costs,
+        "installationWeekend",
+        "installation_weekend_day_cost"
+      ),
+      commisionWeekdays: calc(
+        station,
+        costs,
+        "commisionWeekdays",
+        "commissioning_week_day_cost"
+      ),
+      commisionWeekend: calc(
+        station,
+        costs,
+        "commisionWeekend",
+        "commissioning_weekend_day_cost"
+      ),
+      travelDays: calc(
+        station,
+        costs,
+        "roundedTravelDays",
+        "travel_labor_day_cost"
+      ),
+      trips: calc(station, costs, "strategyCycles", "ticket_cost"),
+      perDiem: calc(station, costs, "perDiem", "per_diem_day_cost"),
+    }))
+    .value();
   return result;
 };
 
@@ -438,36 +456,48 @@ const fillingData = (strategy, stations, costs, calcType) => {
   };
   //////////////////////////////////// EXECUTING //////////////////////////////////
   const preparedStations = prepareStations(stations);
-  const prepearedCosts = prepareObject(costs, calcType, 'costs');
+  const prepearedCosts = prepareObject(costs, calcType, "costs");
 
-  const result = _.map(preparedStations, (station) => {
-    const isLastStation = _.isEqual(station, _.last(preparedStations));
+  const result = _.chain(preparedStations)
+    .map((station) => {
+      const stationPlan = prepareObject(
+        _.chain(stations)
+          .filter((st) => st.id === station.id)
+          .first()
+          .value(),
+        calcType,
+        "station"
+      );
 
-    const stationPlan = prepareObject(
-      _.chain(stations)
-        .filter((st) => st.id === station.id)
-        .first()
-        .value(),
-      calcType,
-      "station"
-    );
+      if (isEmptyStation(stationPlan)) {
+        return;
+      }
 
-    const response = startFill({
-      station,
-      stationPlan,
-      strategy,
-      eventIdx,
-      daysLeftInCurrentEvent,
-      isLastStation,
-    });
+      const isLastStation = _.isEqual(station, _.last(preparedStations));
 
-    eventIdx = _.get(response, "eventIdx");
-    daysLeftInCurrentEvent = _.get(response, "daysLeftInCurrentEvent");
+      const response = startFill({
+        station,
+        stationPlan,
+        strategy,
+        eventIdx,
+        daysLeftInCurrentEvent,
+        isLastStation,
+      });
 
-    return _.get(response, "station");
-  });
- 
-  return  fillPriceList(sum(result), prepearedCosts);
+      eventIdx = _.get(response, "eventIdx");
+      daysLeftInCurrentEvent = _.get(response, "daysLeftInCurrentEvent");
+
+      return _.get(response, "station");
+    })
+    .value()
+    .filter((property) => property);
+
+  const guneralSum = _.map(
+    fillPriceList(sum(result, true), prepearedCosts),
+    (s) => _.omit(s, "id")
+  );
+  console.log("guneralSum", guneralSum);
+  return fillPriceList(sum(result, false), prepearedCosts);
 };
 
 const result = fillingData(COGNEX_STRATEGY, STATIONS, COSTS, "cognex");
