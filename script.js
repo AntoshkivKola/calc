@@ -20,6 +20,11 @@ const STATIONS = [
     commissioning_days_cognex: 1.5,
   },
 ];
+const STRATEGY_INDEX = {
+  FIRST_TRAVEL: 0,
+  LAST_WORKING_EVENT: COGNEX_STRATEGY.length - 2,
+  LAST_TRAVEL: COGNEX_STRATEGY.length - 1,
+};
 
 const prepareStations = _.chain(STATIONS)
   .map((station) =>
@@ -38,9 +43,11 @@ const prepareStations = _.chain(STATIONS)
   .flatten()
   .value();
 
-const addTravelDays = (station) => {
-  const travelDays = _.values(COGNEX_STRATEGY[0])[0];
-  station.roundedTravelDays += Math.ceil(travelDays);
+const LAST_STATION_INDEX = prepareStations.length - 1;
+
+const addTravelDays = (station, eventIdx) => {
+  const travelDays = _.chain(COGNEX_STRATEGY[eventIdx]).values().first();
+  station.roundedTravelDays += _.ceil(travelDays);
   station.travelDays += travelDays;
   return station;
 };
@@ -82,24 +89,26 @@ const isEventOver = (stationPlan, station, install) => {
  * @param {object} stationPlan
  * @param {object} station
  * @param {string} eventType
- * @param {number} dayNumber
+ * @param {number} eventIdx
  * @returns
  */
-const getDaysToFill = (stationPlan, station, eventType, dayNumber = 0) => {
-  if (eventType === "installation") {
-    return (
-      stationPlan.installation_days_cognex -
-      (station.installationWeekdays + station.installationWeekend)
-    );
-  } else if (eventType === "commissioning") {
-    return (
-      stationPlan.commissioning_days_cognex -
-      (station.commisionWeekdays + station.commisionWeekend)
-    );
-  } else if (eventType === "travel") {
-    return _.values(COGNEX_STRATEGY[dayNumber])[0];
+const getDaysToFill = (stationPlan, station, eventType, eventIdx = 0) => {
+  switch (eventType) {
+    case "installation":
+      return (
+        stationPlan.installation_days_cognex -
+        (station.installationWeekdays + station.installationWeekend)
+      );
+    case "commissioning":
+      return (
+        stationPlan.commissioning_days_cognex -
+        (station.commisionWeekdays + station.commisionWeekend)
+      );
+    case "travel":
+      return _.chain(COGNEX_STRATEGY[eventIdx]).values().first();
+    default:
+      return 0;
   }
-  return 0;
 };
 
 /**
@@ -139,65 +148,71 @@ const addEventDaysToStation = (
  * Fills the station with data, returns the index of the current event and the number of days left in the current event
  * @param {object} station
  * @param {object} stationPlan
- * @param {number} dayNumber
- * @param {number} howDaysLeftInCurrentEvent
+ * @param {number} eventIdx
+ * @param {number} daysLeftInCurrentEvent
  * @returns
  */
-const startFill = (
+const startFill = ({
   station,
   stationPlan,
-  dayNumber,
-  howDaysLeftInCurrentEvent
-) => {
+  eventIdx,
+  daysLeftInCurrentEvent,
+  stationIdx,
+}) => {
   let isFirstEvent = true;
   let eventName;
   let eventDays;
 
-  if (dayNumber === 0) {
+  if (eventIdx === 0) {
     station.strategyCycles = 1;
   }
 
   while (true) {
-    if (dayNumber >= COGNEX_STRATEGY.length) {
-      dayNumber = 0;
+    if (eventIdx >= COGNEX_STRATEGY.length) {
+      eventIdx = 0;
       station.strategyCycles++;
     }
 
-    if (howDaysLeftInCurrentEvent <= 0 || isFirstEvent) {
-      eventName = _.keys(COGNEX_STRATEGY[dayNumber])[0];
-      eventDays = _.values(COGNEX_STRATEGY[dayNumber])[0];
+    if (daysLeftInCurrentEvent <= 0 || isFirstEvent) {
+      eventName = _.chain(COGNEX_STRATEGY[eventIdx]).keys().first().value();
+      eventDays = _.chain(COGNEX_STRATEGY[eventIdx]).values().first().value();
     }
 
-    if (!isFirstEvent && howDaysLeftInCurrentEvent <= 0) {
-      howDaysLeftInCurrentEvent = eventDays;
+    if (!isFirstEvent && daysLeftInCurrentEvent <= 0) {
+      daysLeftInCurrentEvent = eventDays;
     }
 
     switch (eventName) {
       case "travel":
-        addTravelDays(station);
-        const daysToFill = getDaysToFill(stationPlan, station, "travel", dayNumber);
-        howDaysLeftInCurrentEvent =
+        addTravelDays(station, eventIdx);
+        const daysToFill = getDaysToFill(
+          stationPlan,
+          station,
+          "travel",
+          eventIdx
+        );
+        daysLeftInCurrentEvent =
           eventDays - getDaysToAdd(daysToFill, eventDays);
         break;
 
       case "workingWeekdays":
-        howDaysLeftInCurrentEvent = addEventDaysToStation(
+        daysLeftInCurrentEvent = addEventDaysToStation(
           station,
           stationPlan,
           "installationWeekdays",
           "commisionWeekdays",
-          howDaysLeftInCurrentEvent,
+          daysLeftInCurrentEvent,
           eventDays
         );
         break;
 
       case "workingWeekend":
-        howDaysLeftInCurrentEvent = addEventDaysToStation(
+        daysLeftInCurrentEvent = addEventDaysToStation(
           station,
           stationPlan,
           "installationWeekend",
           "commisionWeekend",
-          howDaysLeftInCurrentEvent,
+          daysLeftInCurrentEvent,
           eventDays
         );
         break;
@@ -210,18 +225,24 @@ const startFill = (
       isEventOver(stationPlan, station, true) &&
       isEventOver(stationPlan, station, false)
     ) {
-      if (dayNumber === COGNEX_STRATEGY.length - 2) {
-        addTravelDays(station);
-        dayNumber = 0;
+      if (eventIdx === STRATEGY_INDEX.LAST_WORKING_EVENT) {
+        addTravelDays(station, eventIdx);
+        eventIdx = 0;
+        eventName = _.chain(COGNEX_STRATEGY[eventIdx]).keys().first().value();
       }
-      return [dayNumber, howDaysLeftInCurrentEvent];
+
+      if (stationIdx === LAST_STATION_INDEX && eventName !== "travel") {
+        addTravelDays(station, STRATEGY_INDEX.LAST_TRAVEL);
+      }
+
+      return { station, eventIdx, daysLeftInCurrentEvent };
     }
 
-    if (howDaysLeftInCurrentEvent > 0) {
+    if (daysLeftInCurrentEvent > 0) {
       continue;
     }
 
-    dayNumber++;
+    eventIdx++;
     isFirstEvent = false;
   }
 };
@@ -231,86 +252,58 @@ const startFill = (
  * @returns
  */
 const foo = () => {
-  let eventNumber = 0;
-  let howDaysLeftInCurrentEvent = 0;
+  let eventIdx = 0;
+  let daysLeftInCurrentEvent = 0;
 
-  return (stantion) => {
-    const stationPlan = _.filter(STATIONS, (st) => st.id === stantion.id)[0];
+  return (stations) => {
+    const result = _.map(stations, (station, stationIdx) => {
+      const stationPlan = _.chain(STATIONS)
+        .filter((st) => st.id === station.id)
+        .first()
+        .value();
 
-    response = startFill(
-      stantion,
-      stationPlan,
-      eventNumber,
-      howDaysLeftInCurrentEvent
-    );
-    eventNumber = response[0];
-    howDaysLeftInCurrentEvent = response[1];
+      const response = startFill({
+        station,
+        stationPlan,
+        eventIdx,
+        daysLeftInCurrentEvent,
+        stationIdx,
+      });
 
-    return stantion;
+      eventIdx = _.get(response, "eventIdx");
+      daysLeftInCurrentEvent = _.get(response, "daysLeftInCurrentEvent");
+
+      return _.get(response, "station");
+    });
+
+    return result;
   };
 };
 
 /**
- * Adds last travel if needed
+ * Adds the values of stations with the same ID
  * @param {object[]} stations
  * @returns
  */
-const checkTravel = (stations) => {
-  let countTravel = 0;
-
-  stations.forEach((station) => {
-    countTravel += station.roundedTravelDays;
-  });
-
-  if (countTravel % 2 === 0) {
-    return stations;
-  }
-  addTravelDays(stations[stations.length - 1]);
-  return stations;
-};
-
-/**
- * Adds the values of stations with the same ID
- * @param {object[]} stantions
- * @returns
- */
-const sum = (stantions) => {
-  return _.chain(stantions)
+const sum = (stations) => {
+  return _.chain(stations)
     .groupBy("id")
-    .map((stantion) => {
-      return _.reduce(
-        stantion,
-        (result, currentStation) => ({
-          id: currentStation.id,
-          installationWeekdays:
-            result.installationWeekdays + currentStation.installationWeekdays,
-          installationWeekend:
-            result.installationWeekend + currentStation.installationWeekend,
-          commisionWeekdays:
-            result.commisionWeekdays + currentStation.commisionWeekdays,
-          commisionWeekend:
-            result.commisionWeekend + currentStation.commisionWeekend,
-          travelDays: result.travelDays + currentStation.travelDays,
-          roundedTravelDays:
-            result.roundedTravelDays + currentStation.roundedTravelDays,
-          strategyCycles: result.strategyCycles + currentStation.strategyCycles,
-        }),
-        {
-          id: 0,
-          installationWeekdays: 0,
-          installationWeekend: 0,
-          commisionWeekdays: 0,
-          commisionWeekend: 0,
-          travelDays: 0,
-          roundedTravelDays: 0,
-          strategyCycles: 0,
-        }
-      );
+    .map((station, id) => {
+      return {
+        id: parseInt(id),
+        installationWeekdays: _.sumBy(station, "installationWeekdays"),
+        installationWeekend: _.sumBy(station, "installationWeekend"),
+        commisionWeekdays: _.sumBy(station, "commisionWeekdays"),
+        commisionWeekend: _.sumBy(station, "commisionWeekend"),
+        travelDays: _.sumBy(station, "travelDays"),
+        roundedTravelDays: _.sumBy(station, "roundedTravelDays"),
+        strategyCycles: _.sumBy(station, "strategyCycles"),
+      };
     })
     .value();
 };
 
 const fillingData = foo();
-const result = sum(checkTravel(_.map(prepareStations, fillingData)));
+const result = sum(fillingData(prepareStations));
 
 console.log(result);
