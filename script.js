@@ -139,10 +139,10 @@ const sum = (stations) => {
 
 /**
  * Prepares the object by removing unnecessary fields and renaming the field depending on the type
- * @param {object} obj 
- * @param {string} type 
- * @param {string} objType 
- * @returns 
+ * @param {object} obj
+ * @param {string} type
+ * @param {string} objType
+ * @returns
  */
 const prepareObject = (obj, type, objType) => {
   const isStation = objType === "station";
@@ -166,12 +166,90 @@ const prepareObject = (obj, type, objType) => {
   return preparedObj;
 };
 
-// console.log(getCurrentValue(COSTS, "external", "costs"));
-// const calculete = (stantions, costs) => {
-//   const result = 0;
+/**
+ * Calculates fields values 
+ * @param {object} station
+ * @param {object} costs
+ * @param {string} stationKey
+ * @param {string} costKey
+ */
+const calc = (station, costs, stationKey, costKey) => {
+  let value =
+    _.get(station, stationKey) * _.get(costs, "number_of_persons_onsite");
+  const price = _.get(costs, costKey);
+ 
+  switch (stationKey) {
+    case "perDiem":
+      // (inst + instWe + comm + commWe + travelDays)
+      value =
+        _.get(station, "installationWeekdays") +
+        _.get(station, "installationWeekend") +
+        _.get(station, "commisionWeekdays") +
+        _.get(station, "commisionWeekend") +
+        _.get(station, "travelDays");
 
-//   return result;
-// };
+      break;
+    case "strategyCycles":
+      return {
+        value,
+        price,
+        extended: value * price,
+        trips_to_site: _.get(station, stationKey),
+        number_person: _.get(costs, "number_of_persons_onsite"),
+      };
+    default:
+      break;
+  }
+
+  const extended = value * price;
+  return { value, price, extended };
+};
+
+/**
+ * Fills the resulting object with values of type {value, price, extended}
+ * @param {object} stations
+ * @param {object} costs
+ * @returns
+ */
+const fillPriceList = (stations, costs) => {
+  const result = _.chain(stations).map((station) => ({
+    id: _.get(station, "id"),
+    installationWeekdays: calc(
+      station,
+      costs,
+      "installationWeekdays",
+      "installation_week_day_cost"
+    ),
+
+    installationWeekend: calc(
+      station,
+      costs,
+      "installationWeekend",
+      "installation_weekend_day_cost"
+    ),
+    commisionWeekdays: calc(
+      station,
+      costs,
+      "commisionWeekdays",
+      "commissioning_week_day_cost"
+    ),
+    commisionWeekend: calc(
+      station,
+      costs,
+      "commisionWeekend",
+      "commissioning_weekend_day_cost"
+    ),
+    travelDays: calc(
+      station,
+      costs,
+      "roundedTravelDays",
+      "travel_labor_day_cost"
+    ),
+    trips: calc(station, costs, "strategyCycles", "ticket_cost"),
+    perDiem: calc(station, costs, "perDiem", "per_diem_day_cost"),
+  })).value();
+  return result;
+};
 
 /**
  * Wrapper function to create a closure
@@ -360,6 +438,8 @@ const fillingData = (strategy, stations, costs, calcType) => {
   };
   //////////////////////////////////// EXECUTING //////////////////////////////////
   const preparedStations = prepareStations(stations);
+  const prepearedCosts = prepareObject(costs, calcType, 'costs');
+
   const result = _.map(preparedStations, (station) => {
     const isLastStation = _.isEqual(station, _.last(preparedStations));
 
@@ -386,8 +466,8 @@ const fillingData = (strategy, stations, costs, calcType) => {
 
     return _.get(response, "station");
   });
-
-  return sum(result);
+ 
+  return  fillPriceList(sum(result), prepearedCosts);
 };
 
 const result = fillingData(COGNEX_STRATEGY, STATIONS, COSTS, "cognex");
