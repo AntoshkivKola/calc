@@ -19,7 +19,7 @@ const STATIONS = [
     installation_days_cognex: 3,
     commissioning_days_cognex: 1.5,
   },
-];
+]; 
 
 
 const EVENT_TYPES = {
