@@ -21,6 +21,20 @@ const STATIONS = [
   },
 ];
 
+
+const EVENT_TYPES = {
+  TRAVEL: "travel",
+  INSTALLATION: "installation",
+  COMMISSIONING: "commissioning",
+};
+
+const EVENT_NAMES = {
+  TRAVEL: "travel",
+  WORKING_WEEKDAYS: "workingWeekdays",
+  WORKING_WEEKEND: "workingWeekend",
+};
+
+
 const prepareStations = (stations) =>
   _.chain(stations)
     .map((station) =>
@@ -113,18 +127,6 @@ const fillingData = (strategy, stations) => {
     lastTravel: strategy.length - 1,
   };
 
-  const eventTypes = {
-    travel: "travel",
-    installation: "installation",
-    commissioning: "commissioning",
-  };
-
-  const eventNames = {
-    travel: "travel",
-    workingWeekdays: "workingWeekdays",
-    workingWeekend: "workingWeekend",
-  };
-
   let eventIdx = 0;
   let daysLeftInCurrentEvent = 0;
 
@@ -138,17 +140,17 @@ const fillingData = (strategy, stations) => {
    */
   const getDaysToFill = (stationPlan, station, eventType, eventIdx = 0) => {
     switch (eventType) {
-      case eventTypes.installation:
+      case EVENT_TYPES.INSTALLATION:
         return (
           stationPlan.installation_days_cognex -
           (station.installationWeekdays + station.installationWeekend)
         );
-      case eventTypes.commissioning:
+      case EVENT_TYPES.COMMISSIONING:
         return (
           stationPlan.commissioning_days_cognex -
           (station.commisionWeekdays + station.commisionWeekend)
         );
-      case eventTypes.travel:
+      case EVENT_TYPES.TRAVEL:
         return _.chain(strategy[eventIdx]).values().first();
       default:
         return 0;
@@ -177,7 +179,7 @@ const fillingData = (strategy, stations) => {
       const daysToFill = getDaysToFill(
         stationPlan,
         station,
-        eventTypes.installation
+        EVENT_TYPES.INSTALLATION
       );
       station[property1] += getDaysToAdd(daysToFill, howDaysLeftInCurrentEvent);
 
@@ -187,7 +189,7 @@ const fillingData = (strategy, stations) => {
       const daysToFill = getDaysToFill(
         stationPlan,
         station,
-        eventTypes.commissioning
+        EVENT_TYPES.COMMISSIONING
       );
       station[property2] += getDaysToAdd(daysToFill, howDaysLeftInCurrentEvent);
 
@@ -236,19 +238,19 @@ const fillingData = (strategy, stations) => {
       }
 
       switch (eventName) {
-        case eventNames.travel:
+        case EVENT_NAMES.TRAVEL:
           addTravelDays(station, eventIdx, strategy);
           const daysToFill = getDaysToFill(
             stationPlan,
             station,
-            eventTypes.travel,
+            EVENT_TYPES.TRAVEL,
             eventIdx
           );
           daysLeftInCurrentEvent =
             eventDays - getDaysToAdd(daysToFill, eventDays);
           break;
 
-        case eventNames.workingWeekdays:
+        case EVENT_NAMES.WORKING_WEEKDAYS:
           daysLeftInCurrentEvent = addEventDaysToStation(
             station,
             stationPlan,
@@ -259,7 +261,7 @@ const fillingData = (strategy, stations) => {
           );
           break;
 
-        case eventNames.workingWeekend:
+        case EVENT_NAMES.WORKING_WEEKEND:
           daysLeftInCurrentEvent = addEventDaysToStation(
             station,
             stationPlan,
@@ -284,7 +286,7 @@ const fillingData = (strategy, stations) => {
           eventName = _.chain(strategy[eventIdx]).keys().first().value();
         }
 
-        if (isLastStation && eventName !== eventNames.travel) {
+        if (isLastStation && eventName !== EVENT_NAMES.TRAVEL) {
           addTravelDays(station, strategyIndex.lastTravel, strategy);
         }
 
