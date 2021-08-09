@@ -165,12 +165,10 @@ const week = () => {
   let eventNumber = 0;
   let howDaysLeftInCurrentEvent = 0;
   return (stantion) => {
-    const res = { ...stantion };
-
-    const stationPlan = _.filter(STATIONS, (st) => st.id === res.id)[0];
+    const stationPlan = _.filter(STATIONS, (st) => st.id === stantion.id)[0];
 
     response = startFill(
-      res,
+      stantion,
       stationPlan,
       eventNumber,
       howDaysLeftInCurrentEvent
@@ -178,7 +176,7 @@ const week = () => {
     eventNumber = response[0];
     howDaysLeftInCurrentEvent = response[1];
 
-    return res;
+    return stantion;
   };
 };
 
@@ -199,7 +197,7 @@ const checkTravel = (stantions) => {
 };
 
 const sum = (stantions) => {
-  const res = _.chain(stantions)
+  return _.chain(stantions)
     .groupBy("id")
     .map((value) => {
       return _.reduce(
@@ -232,7 +230,6 @@ const sum = (stantions) => {
       );
     })
     .value();
-  return res;
 };
 
 const fillingData = week();
